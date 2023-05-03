@@ -75,7 +75,7 @@ namespace GumshoeTimerSuite
             }
             if (!ProgressText.OFF.Equals(progressTextSmelter))
             {
-                Harmony.CreateAndPatchAll(typeof(Smelter), GUID);
+                Harmony.CreateAndPatchAll(typeof(SmelterSuite), GUID);
             }
             if (!ProgressText.OFF.Equals(progressTextPlant))
             {
