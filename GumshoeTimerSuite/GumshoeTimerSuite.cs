@@ -7,39 +7,42 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace GumshoeTimerSuite
-{ 
-    [BepInPlugin(GUID, "Gumshoe Timer Suite", "1.1.0")]
+{
+    [BepInPlugin(GUID, "Gumshoe Timer Suite", "1.2.0")]
     public class GumshoeTimerSuite : BaseUnityPlugin
     {
-        private const string GUID = "org.ltmadness.valheim.gumshoetimersuite";
-        private const string COLOR_REGEX_PATERN = "#(([0-9a-fA-F]{2}){3,4}|([0-9a-fA-F]){3,4})";
-        private const bool TEST = false;
+        public const string GUID = "org.ltmadness.valheim.gumshoetimersuite";
+        public const string COLOR_REGEX_PATERN = "#(([0-9a-fA-F]{2}){3,4}|([0-9a-fA-F]){3,4})";
+        public const bool TEST = true;
 
-        private static ConfigEntry<ProgressText> progressTextFermenter;
-        private static ConfigEntry<ProgressText> progressTextSapCollector;
-        private static ConfigEntry<ProgressText> progressTextBeeHive;
-        private static ConfigEntry<ProgressText> progressTextSmelter;
-        private static ConfigEntry<ProgressText> progressTextCookingStation;
-        private static ConfigEntry<TextColor> color;
-        private static ConfigEntry<string> customColor;
+        public static ConfigEntry<ProgressText> progressTextFermenter;
+        public static ConfigEntry<ProgressText> progressTextSapCollector;
+        public static ConfigEntry<ProgressText> progressTextBeehive;
+        public static ConfigEntry<ProgressText> progressTextSmelter;
+        public static ConfigEntry<ProgressText> progressTextPlant;
+        public static ConfigEntry<ProgressText> progressTextCookingStation;
+        public static ConfigEntry<TextColor> color;
+        public static ConfigEntry<string> customColor;
 
-        private static Regex colorRegex;
+        public static Regex colorRegex;
 
         public void Awake()
         {
-            progressTextFermenter = 
+            progressTextFermenter =
                 Config.Bind("General", "Progress Text Fermenter", ProgressText.TIME, "Should the progress text be off/percent/time left for fermenter");
-            progressTextSapCollector = 
+            progressTextSapCollector =
                 Config.Bind("General", "Progress Text Sap Collector", ProgressText.TIME, "Should the progress text be off/percent/time left for sap collector");
-            progressTextBeeHive = 
-                Config.Bind("General", "Progress Text Bee Hive", ProgressText.TIME, "Should the progress text be off/percent/time left for bee hive");
-            progressTextSmelter = 
+            progressTextBeehive =
+                Config.Bind("General", "Progress Text Bee Hive", ProgressText.TIME, "Should the progress text be off/percent/time left for beehive");
+            progressTextSmelter =
                 Config.Bind("General", "Progress Text Smelter", ProgressText.TIME, "Should the progress text be off/percent/time left for objects based on smelter");
-            progressTextCookingStation = 
+            progressTextCookingStation =
                 Config.Bind("General", "Progress Text Cooking Station", ProgressText.TIME, "Should the progress text be off/percent/time left for objects based on cooking station");
-            color = 
+            progressTextPlant =
+                Config.Bind("General", "Progress Text Plants", ProgressText.TIME, "Should the progress text be off/percent/time left for plants");
+            color =
                 Config.Bind("Advanced", "Use color", TextColor.PROGRESSIVE, "Change color of % or time left");
-            customColor = 
+            customColor =
                 Config.Bind("Advanced", "Custom Static Color", "#ff69b4", "If left black uses default, format of color #RRGGBB");
 
             Config.Save();
@@ -48,14 +51,90 @@ namespace GumshoeTimerSuite
                 $"Progress Text Fermenter: {progressTextFermenter.Value}, " +
                 $"Progress Text Sap Collector: {progressTextSapCollector.Value}, " +
                 $"Progress Text Smelter: {progressTextSmelter.Value}, " +
+                $"Progress Text Plants: {progressTextPlant.Value}, " +
                 $"Use color: {color.Value}, " +
                 $"Custom Static Color: {customColor.Value}, ");
 
             colorRegex = new Regex(COLOR_REGEX_PATERN);
 
-            Harmony.CreateAndPatchAll(typeof(GumshoeTimerSuite), GUID);
+            if (!ProgressText.OFF.Equals(progressTextCookingStation))
+            {
+                Harmony.CreateAndPatchAll(typeof(CookingStationSuite), GUID);
+            }
+            if (!ProgressText.OFF.Equals(progressTextBeehive))
+            {
+                Harmony.CreateAndPatchAll(typeof(BeehiveSuite), GUID);
+            }
+            if (!ProgressText.OFF.Equals(progressTextFermenter))
+            {
+                Harmony.CreateAndPatchAll(typeof(FermenterSuite), GUID);
+            }
+            if (!ProgressText.OFF.Equals(progressTextSapCollector))
+            {
+                Harmony.CreateAndPatchAll(typeof(SapCollectorSuite), GUID);
+            }
+            if (!ProgressText.OFF.Equals(progressTextSmelter))
+            {
+                Harmony.CreateAndPatchAll(typeof(Smelter), GUID);
+            }
+            if (!ProgressText.OFF.Equals(progressTextPlant))
+            {
+                Harmony.CreateAndPatchAll(typeof(PlantSuite), GUID);
+            }
         }
 
+        public static string GetTimeResult(int timeleft, string colorHex)
+        {
+            if (!string.IsNullOrEmpty(colorHex))
+            {
+                return $"Progress: <color={colorHex}>{timeleft}s</color>\n";
+            }
+
+            return $"Progress: {timeleft}s\n";
+        }
+
+        public static string GetPercentageResult(int progressPercentage, string colorHex)
+        {
+            if (!string.IsNullOrEmpty(colorHex))
+            {
+                return $"Progress: <color={colorHex}>{progressPercentage}%</color> \n";
+            }
+
+            return $"Progress: {progressPercentage}% \n";
+        }
+
+        public static string GetColor(int percentage)
+        {
+            var csc = customColor.Value.Trim();
+            if (TextColor.PROGRESSIVE.Equals(color.Value))
+            {
+                return $"#{255 / 100 * (100 - percentage):X2}{255 / 100 * percentage:X2}{0:X2}";
+            }
+            else if (TextColor.STATIC.Equals(color.Value) && !csc.IsNullOrWhiteSpace() && colorRegex.IsMatch(csc))
+            {
+                return csc;
+            }
+
+            return null;
+        }
+
+        public enum ProgressText
+        {
+            OFF,
+            PERCENT,
+            TIME
+        }
+
+        public enum TextColor
+        {
+            WHITE,
+            PROGRESSIVE,
+            STATIC
+        }
+    }
+
+    public static class CookingStationSuite
+    {
         [HarmonyPatch(typeof(CookingStation), "GetHoverText")]
         [HarmonyPostfix]
         public static void GetHoverText(CookingStation __instance, ref string __result)
@@ -72,7 +151,7 @@ namespace GumshoeTimerSuite
 
         public static void GetHoverTextCookingStation(CookingStation __instance, ref string __result)
         {
-            if (ProgressText.OFF.Equals(progressTextCookingStation.Value) || __instance.m_addFoodSwitch == null)
+            if (__instance.m_addFoodSwitch == null)
             {
                 return;
             }
@@ -87,7 +166,7 @@ namespace GumshoeTimerSuite
 
                 if (itemName != "")
                 {
-                    CookingStation.ItemConversion itemConversion = 
+                    CookingStation.ItemConversion itemConversion =
                         (CookingStation.ItemConversion)AccessTools
                                                 .Method(typeof(CookingStation), "GetItemConversion")
                                                 .Invoke(__instance, new object[] { itemName });
@@ -96,9 +175,9 @@ namespace GumshoeTimerSuite
                         float cookTime = itemConversion.m_cookTime + 1;
                         float burnTime = itemConversion.m_cookTime * 2;
                         int perc = (int)Math.Floor((double)(cookedTime / cookTime * 100));
-                        string colorHex = GetColor(perc);
+                        string colorHex = GumshoeTimerSuite.GetColor(perc);
                         int burnTimeLeft = (int)Math.Ceiling(burnTime - cookedTime);
-                        if (ProgressText.PERCENT.Equals(progressTextCookingStation.Value))
+                        if (GumshoeTimerSuite.ProgressText.PERCENT.Equals(GumshoeTimerSuite.progressTextCookingStation.Value))
                         {
                             if (perc <= 100)
                             {
@@ -116,7 +195,7 @@ namespace GumshoeTimerSuite
                             else
                             {
                                 perc = (int)Math.Floor(burnTimeLeft / itemConversion.m_cookTime * 100);
-                                colorHex = GetColor(perc);
+                                colorHex = GumshoeTimerSuite.GetColor(perc);
                                 if (!string.IsNullOrEmpty(colorHex))
                                 {
                                     builder.Insert(0, $"<color={colorHex}>{perc}%</color> \n");
@@ -129,7 +208,7 @@ namespace GumshoeTimerSuite
                                 builder.Insert(0, $"{GetToItemName(itemConversion)} -> Burned ");
                             }
                         }
-                        else if (ProgressText.TIME.Equals(progressTextCookingStation.Value))
+                        else if (GumshoeTimerSuite.ProgressText.TIME.Equals(GumshoeTimerSuite.progressTextCookingStation.Value))
                         {
                             int timeLeft = (int)Math.Ceiling(cookTime - cookedTime);
 
@@ -166,15 +245,25 @@ namespace GumshoeTimerSuite
 
             __result = builder.ToString();
 
-            if (TEST)
+            if (GumshoeTimerSuite.TEST)
             {
                 __result += "\n Cooking Station";
             }
-
-            return;
         }
-             
 
+        public static string GetFromItemName(CookingStation.ItemConversion itemConversion)
+        {
+            return Localization.instance.Localize(itemConversion.m_from.m_itemData.m_shared.m_name);
+        }
+
+        public static string GetToItemName(CookingStation.ItemConversion itemConversion)
+        {
+            return Localization.instance.Localize(itemConversion.m_to.m_itemData.m_shared.m_name);
+        }
+    }
+
+    public static class BeehiveSuite
+    {
         [HarmonyPatch(typeof(Beehive), "Awake")]
         [HarmonyPrefix]
         public static bool Awake(Beehive __instance)
@@ -215,7 +304,7 @@ namespace GumshoeTimerSuite
         [HarmonyPostfix]
         public static void GetHoverText(Beehive __instance, ref string __result)
         {
-            if (__result.IsNullOrWhiteSpace() || ProgressText.OFF.Equals(progressTextBeeHive.Value))
+            if (__result.IsNullOrWhiteSpace())
             {
                 return;
             }
@@ -238,31 +327,33 @@ namespace GumshoeTimerSuite
             if (timePassed > 0 && timePassed < __instance.m_secPerUnit)
             {
                 int perc = (int)Math.Floor((double)(timePassed / __instance.m_secPerUnit * 100));
-                string colorHex = GetColor(perc);
+                string colorHex = GumshoeTimerSuite.GetColor(perc);
 
-                if (ProgressText.PERCENT.Equals(progressTextBeeHive.Value))
+                if (GumshoeTimerSuite.ProgressText.PERCENT.Equals(GumshoeTimerSuite.progressTextBeehive.Value))
                 {
                     __result = $"Progress: <color={colorHex}>{perc}%</color>\n" + __result;
-                } 
-                else if (ProgressText.TIME.Equals(progressTextBeeHive.Value))
+                }
+                else if (GumshoeTimerSuite.ProgressText.TIME.Equals(GumshoeTimerSuite.progressTextBeehive.Value))
                 {
                     int timeLeft = (int)Math.Ceiling(__instance.m_secPerUnit - timePassed);
-                    __result = GetTimeResult(timeLeft, colorHex) + __result;
+                    __result = GumshoeTimerSuite.GetTimeResult(timeLeft, colorHex) + __result;
                 }
 
-                if (TEST)
+                if (GumshoeTimerSuite.TEST)
                 {
                     __result += "\n BeeHive";
                 }
-                return;
             }
         }
+    }
 
+    public static class FermenterSuite
+    {
         [HarmonyPatch(typeof(Fermenter), "GetHoverText")]
         [HarmonyPostfix]
         public static void GetHoverText(Fermenter __instance, ref string __result)
         {
-            if (__result.IsNullOrWhiteSpace() || ProgressText.OFF.Equals(progressTextFermenter.Value))
+            if (__result.IsNullOrWhiteSpace())
             {
                 return;
             }
@@ -278,27 +369,43 @@ namespace GumshoeTimerSuite
                     if (!timePassed.Equals(-1) && timePassed < __instance.m_fermentationDuration)
                     {
                         int perc = (int)(timePassed / __instance.m_fermentationDuration * 100);
-                        string colorHex = GetColor(perc);
+                        string colorHex = GumshoeTimerSuite.GetColor(perc);
 
-                        if (ProgressText.PERCENT.Equals(progressTextFermenter.Value))
+                        if (GumshoeTimerSuite.ProgressText.PERCENT.Equals(GumshoeTimerSuite.progressTextFermenter.Value))
                         {
                             __result = $"Progress: <color={colorHex}>{perc}s</color>\n" + __result;
                         }
-                        else if (ProgressText.TIME.Equals(progressTextFermenter.Value))
+                        else if (GumshoeTimerSuite.ProgressText.TIME.Equals(GumshoeTimerSuite.progressTextFermenter.Value))
                         {
                             __result = GetTimeResult(__instance, timePassed, colorHex) + __result;
                         }
 
-                        if (TEST)
+                        if (GumshoeTimerSuite.TEST)
                         {
                             __result += "\n Fermenter";
                         }
-                        return;
                     }
                 }
             }
         }
 
+        public static string GetTimeResult(Fermenter __instance, double timePassed, string colorHex)
+        {
+            double left = ((double)__instance.m_fermentationDuration) - timePassed;
+            int min = (int)Math.Floor(left / 60);
+            int sec = ((int)left) % 60;
+
+            if (!string.IsNullOrEmpty(colorHex))
+            {
+                return $"Progress: <color={colorHex}>{min}m {sec}s</color>\n";
+            }
+
+            return $"Progress: {min}m {sec}s";
+        }
+    }
+
+    public static class SapCollectorSuite
+    {
         [HarmonyPatch(typeof(SapCollector), "GetHoverText")]
         [HarmonyPostfix]
         public static void GetHoverText(SapCollector __instance, ref string __result)
@@ -309,7 +416,7 @@ namespace GumshoeTimerSuite
             }
 
             ZNetView m_nview = (ZNetView)AccessTools.Field(typeof(SapCollector), "m_nview").GetValue(__instance);
-            
+
             if (m_nview.GetZDO().GetInt("level") >= __instance.m_maxLevel)
             {
                 return;
@@ -326,24 +433,23 @@ namespace GumshoeTimerSuite
             if (timePassed > 0 && timePassed < __instance.m_secPerUnit)
             {
                 int perc = (int)Math.Floor((double)(timePassed / __instance.m_secPerUnit * 100));
-                string colorHex = GetColor(perc);
+                string colorHex = GumshoeTimerSuite.GetColor(perc);
 
-                if (ProgressText.PERCENT.Equals(progressTextSapCollector.Value))
+                if (GumshoeTimerSuite.ProgressText.PERCENT.Equals(GumshoeTimerSuite.progressTextSapCollector.Value))
                 {
-                    __result = GetPercentageResult(perc, colorHex) + __result;
+                    __result = GumshoeTimerSuite.GetPercentageResult(perc, colorHex) + __result;
                 }
-                else if (ProgressText.TIME.Equals(progressTextSapCollector.Value))
+                else if (GumshoeTimerSuite.ProgressText.TIME.Equals(GumshoeTimerSuite.progressTextSapCollector.Value))
                 {
-                    
+
                     int timeLeft = (int)Math.Ceiling(__instance.m_secPerUnit - timePassed);
-                    __result = GetTimeResult(timeLeft, colorHex) + __result;
+                    __result = GumshoeTimerSuite.GetTimeResult(timeLeft, colorHex) + __result;
                 }
 
-                if (TEST)
+                if (GumshoeTimerSuite.TEST)
                 {
                     __result += "\n Sap Collector";
                 }
-                return;
             }
         }
 
@@ -380,12 +486,15 @@ namespace GumshoeTimerSuite
 
             return false;
         }
+    }
 
+    public static class SmelterSuite
+    {
         [HarmonyPatch(typeof(Smelter), "UpdateHoverTexts")]
         [HarmonyPostfix]
         public static void UpdateHoverText(Smelter __instance)
         {
-            if (!(bool)__instance.m_addOreSwitch || ProgressText.OFF.Equals(progressTextSmelter.Value))
+            if (!(bool)__instance.m_addOreSwitch)
             {
                 return;
             }
@@ -401,100 +510,56 @@ namespace GumshoeTimerSuite
             if (progressTime > 0.0)
             {
                 int progressPercentage = (int)(progressTime / timePerItem * 100);
-                string colorHex = GetColor(progressPercentage);
+                string colorHex = GumshoeTimerSuite.GetColor(progressPercentage);
 
-                if (ProgressText.TIME.Equals(progressTextSmelter.Value))
+                if (GumshoeTimerSuite.ProgressText.TIME.Equals(GumshoeTimerSuite.progressTextSmelter.Value))
                 {
-                    __instance.m_addOreSwitch.m_hoverText = GetTimeResult(timeLeft, colorHex) + __instance.m_addOreSwitch.m_hoverText;
+                    __instance.m_addOreSwitch.m_hoverText = GumshoeTimerSuite.GetTimeResult(timeLeft, colorHex) + __instance.m_addOreSwitch.m_hoverText;
                 }
                 else
                 {
-                   __instance.m_addOreSwitch.m_hoverText = GetPercentageResult(progressPercentage, colorHex) + __instance.m_addOreSwitch.m_hoverText;
+                    __instance.m_addOreSwitch.m_hoverText = GumshoeTimerSuite.GetPercentageResult(progressPercentage, colorHex) + __instance.m_addOreSwitch.m_hoverText;
                 }
+            }
 
+            if (GumshoeTimerSuite.TEST)
+            {
                 __instance.m_addOreSwitch.m_hoverText += "\n Smelter";
+            }
+        }
+    }
+
+    public static class PlantSuite
+    {
+        [HarmonyPatch(typeof(Plant), "GetHoverText")]
+        [HarmonyPostfix]
+        public static void GetHoverText(Plant __instance, ref string __result)
+        {
+            if (String.IsNullOrEmpty(__result))
+            {
                 return;
             }
-        }
 
-        public static string GetFromItemName(CookingStation.ItemConversion itemConversion)
-        {
-            return Localization.instance.Localize(itemConversion.m_from.m_itemData.m_shared.m_name);
-        }
+            Status m_status = (Status)AccessTools.Field(typeof(Plant), "m_status").GetValue(__instance);
 
-        public static string GetToItemName(CookingStation.ItemConversion itemConversion)
-        {
-            return Localization.instance.Localize(itemConversion.m_to.m_itemData.m_shared.m_name);
-        }
-
-        public static string GetTimeResult(Fermenter __instance, double timePassed, string colorHex)
-        {
-            double left = ((double)__instance.m_fermentationDuration) - timePassed;
-            int min = (int)Math.Floor(left / 60);
-            int sec = ((int)left) % 60;
-
-            if (!string.IsNullOrEmpty(colorHex))
+            if (Status.Healthy.Equals(m_status))
             {
-                return $"Progress: <color={colorHex}>{min}m {sec}s</color>\n";
+                
             }
 
-            return $"Progress: {min}m {sec}s";
-        }
-
-        public static string GetTimeResult(int timeleft, string colorHex)
-        {
-            if (!string.IsNullOrEmpty(colorHex))
+            if (GumshoeTimerSuite.TEST)
             {
-                return $"Progress: <color={colorHex}>{timeleft}s</color>\n";
+                __result += "\n Plant";
             }
-
-            return $"Progress: {timeleft}s\n";
-        }
-
-        public static string GetPercentageResult(int progressPercentage, string colorHex)
-        {
-            if (!string.IsNullOrEmpty(colorHex))
-            {
-                return $"Progress: <color={colorHex}>{progressPercentage}%</color> \n";
-            }
-
-            return $"Progress: {progressPercentage}% \n";
-        }
-
-        public static string GetColor(int percentage)
-        {
-            var csc = customColor.Value.Trim();
-            if (TextColor.PROGRESSIVE.Equals(color.Value))
-            {
-                return $"#{255 / 100 * (100 - percentage):X2}{255 / 100 * percentage:X2}{0:X2}";
-            }
-            else if (TextColor.STATIC.Equals(color.Value) && !csc.IsNullOrWhiteSpace() && colorRegex.IsMatch(csc))
-            {
-                return csc;
-            }
-
-            return null;
         }
 
         enum Status
         {
-            NotDone,
-            Done,
-            Burnt
-        }
-
-        enum ProgressText
-        {
-            OFF,
-            PERCENT,
-            TIME
-        }
-
-        enum TextColor
-        {
-            WHITE,
-            PROGRESSIVE,
-            STATIC
+            Healthy,
+            NoSun,
+            NoSpace,
+            WrongBiome,
+            NotCultivated,
         }
     }
 }
