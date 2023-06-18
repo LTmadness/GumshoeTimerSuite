@@ -13,7 +13,7 @@ namespace GumshoeTimerSuite
     {
         public const string GUID = "org.ltmadness.valheim.gumshoetimersuite";
         public const string COLOR_REGEX_PATERN = "#(([0-9a-fA-F]{2}){3,4}|([0-9a-fA-F]){3,4})";
-        public const bool TEST = true;
+        public const bool TEST = false;
 
         public static ConfigEntry<ProgressText> progressTextFermenter;
         public static ConfigEntry<ProgressText> progressTextSapCollector;
@@ -39,7 +39,7 @@ namespace GumshoeTimerSuite
             progressTextCookingStation =
                 Config.Bind("General", "Progress Text Cooking Station", ProgressText.TIME, "Should the progress text be off/percent/time left for objects based on cooking station");
             progressTextPlant =
-                Config.Bind("General", "Progress Text Plants", ProgressText.TIME, "Should the progress text be off/percent/time left for plants");
+                Config.Bind("General", "Progress Text Plants", ProgressText.TIME, "Should the progress text be off/time left for plants");
             color =
                 Config.Bind("Advanced", "Use color", TextColor.PROGRESSIVE, "Change color of % or time left");
             customColor =
@@ -490,15 +490,25 @@ namespace GumshoeTimerSuite
 
     public static class SmelterSuite
     {
-        [HarmonyPatch(typeof(Smelter), "UpdateHoverTexts")]
+        [HarmonyPatch(typeof(Smelter), "OnHoverAddFuel")]
         [HarmonyPostfix]
-        public static void UpdateHoverText(Smelter __instance)
+        public static void OnHoverAddFuel(Smelter __instance, ref string __result)
         {
-            if (!(bool)__instance.m_addOreSwitch)
+            if (!__result.IsNullOrWhiteSpace())
             {
-                return;
+                __result = UpdateHoverText(__instance, __result);
             }
+        }
 
+        [HarmonyPatch(typeof(Smelter), "OnHoverAddOre")]
+        [HarmonyPostfix]
+        public static void OnHoverAddOre(Smelter __instance, ref string __result)
+        {
+            __result = UpdateHoverText(__instance, __result);
+        }
+
+        public static string UpdateHoverText(Smelter __instance, String original)
+        {
             ZNetView m_nview = (ZNetView)AccessTools.Field(typeof(Smelter), "m_nview").GetValue(__instance);
             float progressTime = m_nview.GetZDO().GetFloat("bakeTimer");
             float modifier = (bool)__instance.m_windmill ? __instance.m_windmill.GetPowerOutput() : 1f;
@@ -514,18 +524,20 @@ namespace GumshoeTimerSuite
 
                 if (GumshoeTimerSuite.ProgressText.TIME.Equals(GumshoeTimerSuite.progressTextSmelter.Value))
                 {
-                    __instance.m_addOreSwitch.m_hoverText = GumshoeTimerSuite.GetTimeResult(timeLeft, colorHex) + __instance.m_addOreSwitch.m_hoverText;
+                    original = GumshoeTimerSuite.GetTimeResult(timeLeft, colorHex) + original;
                 }
                 else
                 {
-                    __instance.m_addOreSwitch.m_hoverText = GumshoeTimerSuite.GetPercentageResult(progressPercentage, colorHex) + __instance.m_addOreSwitch.m_hoverText;
+                    original = GumshoeTimerSuite.GetPercentageResult(progressPercentage, colorHex) + original;
                 }
             }
 
             if (GumshoeTimerSuite.TEST)
             {
-                __instance.m_addOreSwitch.m_hoverText += "\n Smelter";
+                original += "\n Smelter";
             }
+
+            return original;
         }
     }
 
@@ -544,7 +556,31 @@ namespace GumshoeTimerSuite
 
             if (Status.Healthy.Equals(m_status))
             {
-                
+                double timeSincePlanted = (double) AccessTools.Method(typeof(Plant), "TimeSincePlanted").Invoke(__instance, null);
+
+                double maxLeft = __instance.m_growTimeMax - timeSincePlanted;
+
+                if (maxLeft > 0)
+                {
+                    int hours = (int)Math.Floor(maxLeft / 3600);
+                    maxLeft -= hours * 3600;
+                    int min = (int)Math.Floor(maxLeft / 60);
+                    int sec = ((int)maxLeft) % 60;
+
+                    __result = $"Maximum time left: {hours}h {min}min {sec}s\n" + __result;
+                }
+
+
+                double minLeft = __instance.m_growTime - timeSincePlanted;
+
+                if (minLeft > 0) 
+                {
+                    int hours = (int)Math.Floor(minLeft / 3600);
+                    minLeft -= hours * 3600;
+                    int min = (int)Math.Floor(minLeft / 60);
+                    int sec = ((int)minLeft) % 60;
+                    __result = $"Minimum time left: {hours}h {min}min {sec}s\n" + __result;
+                }
             }
 
             if (GumshoeTimerSuite.TEST)
